@@ -15,7 +15,7 @@ from datetime import timedelta
 
 from sklearn.preprocessing      import StandardScaler
 from sklearn.model_selection    import TimeSeriesSplit
-from sklearn.metrics            import mean_absolute_percentage_error
+
 import xgboost as xgb
 
 warnings.filterwarnings("ignore")
@@ -120,7 +120,7 @@ def train_xgb(df: pd.DataFrame) -> xgb.XGBRegressor:
     X, y, feats = _prepare_xgb_data(df)
 
     tscv = TimeSeriesSplit(n_splits=5)
-    mapes = []
+    fold_metrics = []
     for fold, (tr_idx, val_idx) in enumerate(tscv.split(X)):
         model = xgb.XGBRegressor(
             n_estimators=500, max_depth=6, learning_rate=0.05,
@@ -132,11 +132,14 @@ def train_xgb(df: pd.DataFrame) -> xgb.XGBRegressor:
         model.fit(X.iloc[tr_idx], y.iloc[tr_idx],
                   eval_set=[(X.iloc[val_idx], y.iloc[val_idx])],
                   verbose=False)
-        preds = model.predict(X.iloc[val_idx])
-        mape  = mean_absolute_percentage_error(y.iloc[val_idx].abs() + 1e-9,
-                                               np.abs(preds) + 1e-9) * 100
-        mapes.append(mape)
-        log.info("  Fold %d MAPE: %.2f%%", fold + 1, mape)
+        preds  = model.predict(X.iloc[val_idx])
+        actual = y.iloc[val_idx].values
+        # directional accuracy: did we predict the right sign?
+        dir_acc = np.mean(np.sign(preds) == np.sign(actual)) * 100
+        # MAE in basis points (1 bp = 0.01%)
+        mae_bp  = np.mean(np.abs(preds - actual)) * 10_000
+        fold_metrics.append({"dir_acc": dir_acc, "mae_bp": mae_bp})
+        log.info("  Fold %d  Dir.Acc=%.1f%%  MAE=%.2f bp", fold + 1, dir_acc, mae_bp)
 
     # final model on full data
     final = xgb.XGBRegressor(
@@ -148,15 +151,20 @@ def train_xgb(df: pd.DataFrame) -> xgb.XGBRegressor:
     )
     final.fit(X, y)
 
-    # save artefacts
+    avg_dir_acc = round(np.mean([m["dir_acc"] for m in fold_metrics]), 2)
+    avg_mae_bp  = round(np.mean([m["mae_bp"]  for m in fold_metrics]), 2)
+
     joblib.dump(final, MODEL_DIR / "xgb_forecaster.joblib")
     with open(MODEL_DIR / "feature_names.json", "w") as f:
         json.dump(feats, f)
     with open(MODEL_DIR / "metrics.json", "w") as f:
-        json.dump({"xgb_cv_mape_mean": round(np.mean(mapes), 4),
-                   "xgb_cv_mape_std":  round(np.std(mapes),  4)}, f)
+        json.dump({
+            "xgb_cv_directional_accuracy_pct": avg_dir_acc,
+            "xgb_cv_mae_basis_points":         avg_mae_bp,
+            "xgb_cv_folds":                    5,
+        }, f)
 
-    log.info("XGBoost CV MAPE: %.2f%% ± %.2f%%", np.mean(mapes), np.std(mapes))
+    log.info("XGBoost CV  Dir.Acc=%.1f%%  MAE=%.2f bp", avg_dir_acc, avg_mae_bp)
     return final, feats
 
 
@@ -176,6 +184,8 @@ def run_xgb_forecasts(df: pd.DataFrame, model: xgb.XGBRegressor, feats: list[str
         price = last_price
         for fd in future_dates:
             ret_pred = float(model.predict(last_row)[0])
+            # clip to ±0.3% per day — limits 90-day range to ≈±31% (realistic)
+            ret_pred = np.clip(ret_pred, -0.003, 0.003)
             price    = price * (1 + ret_pred)
             rows.append({
                 "ticker":   ticker,

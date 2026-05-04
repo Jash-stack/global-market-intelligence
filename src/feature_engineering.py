@@ -150,8 +150,7 @@ def add_hhi(df: pd.DataFrame) -> pd.DataFrame:
     sector_tot = df.groupby(["date", "sector"])["dollar_volume"].transform("sum")
     share       = (df["dollar_volume"] / sector_tot.replace(0, np.nan))
     df["hhi"]   = df.groupby(["date", "sector"])["dollar_volume"].transform(
-        lambda x: ((x / x.sum().replace(0, np.nan)) ** 2).sum()
-        if x.sum() > 0 else np.nan
+        lambda x: ((x / (x.sum() if x.sum() > 0 else np.nan)) ** 2).sum()
     )
     return df
 

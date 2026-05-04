@@ -88,8 +88,12 @@ def compute_shap(df: pd.DataFrame) -> None:
     cols  = [c for c in feats if c in df.columns]
     X     = df[cols].fillna(0).sample(min(2000, len(df)), random_state=42)
 
-    explainer  = shap.TreeExplainer(model)
-    shap_vals  = explainer.shap_values(X)
+    try:
+        explainer  = shap.TreeExplainer(model)
+        shap_vals  = explainer.shap_values(X)
+    except (ValueError, TypeError) as exc:
+        log.warning("SHAP TreeExplainer failed (%s) — skipping SHAP plot.", exc)
+        return
 
     # bar chart
     fig, ax = plt.subplots(figsize=(10, 6))
