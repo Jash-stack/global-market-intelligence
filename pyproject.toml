@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "global-market-intelligence"
+version = "1.0.0"
+description = "Multi-sector equity analytics platform with forecasting, anomaly detection, and interactive dashboard"
+authors = [{ name = "Jash Shah", email = "jshah67@stevens.edu" }]
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.11"
+keywords = ["finance", "machine-learning", "time-series", "stock-prediction", "xgboost", "streamlit"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Programming Language :: Python :: 3.11",
+]
+dependencies = [
+    "pandas>=2.1",
+    "numpy>=1.26",
+    "scikit-learn>=1.3",
+    "xgboost>=2.0",
+    "statsmodels>=0.14",
+    "shap>=0.44",
+    "plotly>=5.18",
+    "streamlit>=1.29",
+    "pyarrow>=14.0",
+    "requests>=2.31",
+    "python-dotenv>=1.0",
+    "joblib>=1.3",
+]
+
+[project.optional-dependencies]
+dev = ["ruff", "pytest", "pytest-cov", "black"]
+
+[project.urls]
+Homepage = "https://github.com/Jash-stack/global-market-intelligence"
+Repository = "https://github.com/Jash-stack/global-market-intelligence"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "I", "N", "W"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
